@@ -1,22 +1,38 @@
-import 'package:dargon2/dargon2.dart';
+import 'dart:convert';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
 import 'package:jaguar_jwt/jaguar_jwt.dart';
 
 class AuthUtils {
   static const String _secret = 'your_super_secret_jwt_key'; // TODO: Use environment variable
 
-  // FIX: Replaced with a working Argon2 implementation
-  static Future<String> hashPassword(String password) async {
-    final s = Salt.newSalt();
-    final result = await argon2.hashPasswordString(
-      password,
-      salt: s,
-    );
-    return result.encodedString;
+  // Generate a random salt
+  static String _generateSalt() {
+    final random = Random.secure();
+    final saltBytes = List<int>.generate(32, (i) => random.nextInt(256));
+    return base64.encode(saltBytes);
   }
 
-  // FIX: Replaced with a working Argon2 verification
-  static Future<bool> verifyPassword(String password, String hashedPassword) async {
-    return await argon2.verifyHashString(password, hashedPassword);
+  // Hash password with salt using SHA-256
+  static String hashPassword(String password) {
+    final salt = _generateSalt();
+    final passwordBytes = utf8.encode(password + salt);
+    final digest = sha256.convert(passwordBytes);
+    return '$salt:${digest.toString()}';
+  }
+
+  // Verify password against hash
+  static bool verifyPassword(String password, String hashedPassword) {
+    final parts = hashedPassword.split(':');
+    if (parts.length != 2) return false;
+    
+    final salt = parts[0];
+    final hash = parts[1];
+    
+    final passwordBytes = utf8.encode(password + salt);
+    final digest = sha256.convert(passwordBytes);
+    
+    return digest.toString() == hash;
   }
 
   static String generateJwt(int userId, String role) {

@@ -11,7 +11,7 @@ RUN dart pub get
 COPY . .
 
 # Compile the Dart server
-RUN dart compile exe bin/server.dart -o /app/server
+RUN dart compile exe lib/server.dart -o /app/server
 
 # Stage 2: Build the CSS
 FROM node:20 AS build-css

@@ -36,7 +36,15 @@ Middleware createAuthMiddleware() {
           request.url.path == '/' ||
           request.url.path.startsWith('blog/') ||
           request.url.path.startsWith('login') ||
-          request.url.path.startsWith('register')) {
+          request.url.path.startsWith('register') ||
+          request.url.path.endsWith('.css') ||
+          request.url.path.endsWith('.js') ||
+          request.url.path.endsWith('.ico') ||
+          request.url.path.endsWith('.png') ||
+          request.url.path.endsWith('.jpg') ||
+          request.url.path.endsWith('.jpeg') ||
+          request.url.path.endsWith('.gif') ||
+          request.url.path.endsWith('.svg')) {
         return inner(request);
       }
 
@@ -91,8 +99,18 @@ Future<void> main(List<String> args) async {
   _router.mount('/api/', commentHandler.router.call);
   _router.mount('/api/', categoryHandler.router.call);
 
-  // Serve static files from the 'web/public' directory
-  _router.mount('/public/', createStaticHandler('web/public'));
+  // Serve static files from the 'web/public' directory with proper MIME types
+  _router.mount('/public/', createStaticHandler('web/public', defaultDocument: 'index.html'));
+  
+  // Serve CSS files with correct MIME type
+  _router.get('/output.css', (Request request) async {
+    final file = File('web/output.css');
+    if (await file.exists()) {
+      final content = await file.readAsString();
+      return Response.ok(content, headers: {'Content-Type': 'text/css'});
+    }
+    return Response.notFound('CSS file not found');
+  });
 
   // Frontend routes (server-side rendered)
   _router.get('/', (Request request) async {

@@ -194,37 +194,13 @@ packages:
     source: hosted
     version: "3.1.2"
   crypto:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: crypto
       sha256: "1e445881f28f22d6140f181e07737b22f1e099a5e1ff94b0af2f9e4a463f4855"
       url: "https://pub.dev"
     source: hosted
     version: "3.0.6"
-  dargon2:
-    dependency: "direct main"
-    description:
-      name: dargon2
-      sha256: f1fd17183943166e08063ac0eb37ad3c5b485ca3e058d2e1a40ddcf02dd4fc3c
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.2.1"
-  dargon2_core:
-    dependency: transitive
-    description:
-      name: dargon2_core
-      sha256: a105fc3837782d02fff09a4aa355181c882962bf2a31c58f1905c401a6d1d6e5
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.1.1"
-  dargon2_interface:
-    dependency: transitive
-    description:
-      name: dargon2_interface
-      sha256: e352efec19afac3fba5b4c1d4833bec7825ac43bdec88f33117cd68dfccfca40
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.1.1"
   dart_style:
     dependency: transitive
     description:

@@ -35,7 +35,7 @@ class UserService {
     String password,
   ) async {
     final conn = await DatabaseConnection.connection;
-    final hashedPassword = await AuthUtils.hashPassword(password);
+    final hashedPassword = AuthUtils.hashPassword(password);
 
     final result = await conn.execute(
       'INSERT INTO users (email, username, password_hash, role, created_at, updated_at) VALUES (@email, @username, @password_hash, @role, @created_at, @updated_at) RETURNING *',
@@ -57,7 +57,7 @@ class UserService {
       return null;
     }
 
-    if (await AuthUtils.verifyPassword(password, user.passwordHash)) {
+    if (AuthUtils.verifyPassword(password, user.passwordHash)) {
       return user;
     }
     return null;
