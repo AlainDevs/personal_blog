@@ -1,0 +1,80 @@
+<div class="bg-white shadow-md rounded-lg p-6 mb-4">
+    <h1 class="text-3xl font-bold mb-2">{{post.title}}</h1>
+    <p class="text-gray-600 text-sm mb-4">
+        By {{post.author.username}} on {{post.createdAt}}
+        {{#post.categories}}
+        <span class="inline-block bg-blue-200 text-blue-800 text-xs px-2 rounded-full ml-2">{{name}}</span>
+        {{/post.categories}}
+    </p>
+    <div class="prose max-w-none mb-6">
+        {{{post.contentHtml}}}
+    </div>
+
+    <h2 class="text-2xl font-bold mb-4">Comments</h2>
+    {{#comments}}
+    <div class="bg-gray-100 p-4 rounded-lg mb-3">
+        <p class="text-gray-700">{{content}}</p>
+        <p class="text-gray-600 text-sm text-right">- {{author.username}} on {{createdAt}}</p>
+    </div>
+    {{/comments}}
+    {{^comments}}
+    <p>No comments yet. Be the first to comment!</p>
+    {{/comments}}
+
+    <h2 class="text-2xl font-bold mb-4 mt-6">Add a Comment</h2>
+    <form id="commentForm">
+        <div class="mb-4">
+            <label for="commentContent" class="block text-gray-700 text-sm font-bold mb-2">Your Comment:</label>
+            <textarea id="commentContent" name="commentContent" rows="4" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required></textarea>
+        </div>
+        <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+            Submit Comment
+        </button>
+        <p id="commentErrorMessage" class="text-red-500 text-xs italic mt-4"></p>
+    </form>
+</div>
+
+<script>
+    document.getElementById('commentForm').addEventListener('submit', async function(event) {
+        event.preventDefault();
+
+        const commentContent = document.getElementById('commentContent').value;
+        const commentErrorMessage = document.getElementById('commentErrorMessage');
+        const postId = "{{post.id}}"; // Assuming post.id is available in the template context
+
+        commentErrorMessage.textContent = '';
+
+        // TODO: Get token and user ID from localStorage or session
+        const token = localStorage.getItem('token');
+        // For now, hardcoding a user ID for testing. This should come from JWT.
+        const userId = 1; 
+
+        if (!token || !userId) {
+            commentErrorMessage.textContent = 'You must be logged in to comment.';
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/posts/${postId}/comments`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ user_id: userId, content: commentContent }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // Reload page or dynamically add comment
+                location.reload(); 
+            } else {
+                commentErrorMessage.textContent = data.message || 'Failed to add comment.';
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            commentErrorMessage.textContent = 'An unexpected error occurred.';
+        }
+    });
+</script>

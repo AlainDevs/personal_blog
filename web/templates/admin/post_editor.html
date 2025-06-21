@@ -1,0 +1,97 @@
+<h1 class="text-3xl font-bold mb-6">{{#post}}Edit Post{{/post}}{{^post}}Create New Post{{/post}}</h1>
+
+<div class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
+    <form id="postForm">
+        <input type="hidden" id="postId" value="{{post.id}}">
+        <div class="mb-4">
+            <label for="title" class="block text-gray-700 text-sm font-bold mb-2">Title:</label>
+            <input type="text" id="title" name="title" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" value="{{post.title}}" required>
+        </div>
+        <div class="mb-4">
+            <label for="slug" class="block text-gray-700 text-sm font-bold mb-2">Slug:</label>
+            <input type="text" id="slug" name="slug" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" value="{{post.slug}}" required>
+        </div>
+        <div class="mb-4">
+            <label for="contentMarkdown" class="block text-gray-700 text-sm font-bold mb-2">Content (Markdown):</label>
+            <textarea id="contentMarkdown" name="contentMarkdown" rows="15" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>{{post.contentMarkdown}}</textarea>
+        </div>
+        <div class="mb-6">
+            <label class="block text-gray-700 text-sm font-bold mb-2">
+                <input type="checkbox" id="published" name="published" class="mr-2 leading-tight" {{#post.published}}checked{{/post.published}}>
+                <span class="text-sm">Published</span>
+            </label>
+        </div>
+        <div class="flex items-center justify-between">
+            <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                {{#post}}Update Post{{/post}}{{^post}}Create Post{{/post}}
+            </button>
+            <a href="/admin" class="inline-block align-baseline font-bold text-sm text-gray-500 hover:text-gray-800">
+                Cancel
+            </a>
+        </div>
+        <p id="errorMessage" class="text-red-500 text-xs italic mt-4"></p>
+    </form>
+</div>
+
+<script>
+    document.getElementById('postForm').addEventListener('submit', async function(event) {
+        event.preventDefault();
+
+        const postId = document.getElementById('postId').value;
+        const title = document.getElementById('title').value;
+        const slug = document.getElementById('slug').value;
+        const contentMarkdown = document.getElementById('contentMarkdown').value;
+        const published = document.getElementById('published').checked;
+        const errorMessage = document.getElementById('errorMessage');
+
+        errorMessage.textContent = '';
+
+        // TODO: Get token and user ID from localStorage or session
+        const token = localStorage.getItem('token');
+        // For now, hardcoding a user ID for testing. This should come from JWT.
+        const userId = 1; 
+
+        if (!token || !userId) {
+            errorMessage.textContent = 'You must be logged in to create/edit posts.';
+            return;
+        }
+
+        const postData = {
+            user_id: userId, // Only needed for creation
+            title,
+            slug,
+            content_markdown: contentMarkdown,
+            published,
+        };
+
+        let url = '/api/admin/posts';
+        let method = 'POST';
+
+        if (postId) {
+            url = `/api/admin/posts/${postId}`;
+            method = 'PUT';
+        }
+
+        try {
+            const response = await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(postData),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                window.location.href = '/admin'; // Redirect to admin dashboard
+            } else {
+                errorMessage.textContent = data.message || 'Operation failed.';
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            errorMessage.textContent = 'An unexpected error occurred.';
+        }
+    });
+</script>

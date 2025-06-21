@@ -22,3 +22,6 @@ webdev build
 
 To learn how to interop with web APIs and other JS libraries,
 check out https://dart.dev/interop/js-interop.
+
+##repomix
+docker run -v .:/app -it --rm ghcr.io/yamadashy/repomix  --include "**/*.dart,**/*.yaml,web/manifest.json,**/*.html" --style plain
