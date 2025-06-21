@@ -1,0 +1,16 @@
+{
+  "name": "personal_blog",
+  "version": "1.0.0",
+  "description": "Tailwind CSS setup for a Dart project",
+  "main": "index.js",
+  "scripts": {
+    "build:css": "tailwindcss -i web/input.css -o web/output.css",
+    "watch:css": "tailwindcss -i web/input.css -o web/output.css --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "tailwindcss": "^3.4.1"
+  }
+}
