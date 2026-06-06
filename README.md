@@ -3,25 +3,83 @@ A bare-bones Dart web app.
 Uses [`package:web`](https://pub.dev/packages/web)
 to interop with JS and the DOM.
 
-## Running and building
+## Run with Docker Compose
 
-To run the app,
-activate and use [`package:webdev`](https://dart.dev/tools/webdev):
+This project has one beginner-friendly way to start and deploy it: Docker
+Compose. You do not need to install Dart, Node.js, PostgreSQL, or WebDev on your
+computer. Docker builds the app and starts the database for you.
 
+### 1. Install Docker
+
+Install Docker Desktop on macOS or Windows, or Docker Engine with Docker Compose
+on Linux. After installing Docker, check that these commands work:
+
+```shell
+docker --version
+docker compose version
 ```
-dart pub global activate webdev
-webdev serve
+
+### 2. Start the blog
+
+From this project folder, run:
+
+```shell
+docker compose up --build
 ```
 
-To build a production version ready for deployment,
-use the `webdev build` command:
+The first start can take a few minutes because Docker downloads the base images,
+installs dependencies, builds the server, builds the CSS, and starts PostgreSQL.
 
-```
-webdev build
+### 3. Open the website
+
+When the containers are running, open the blog in your browser:
+
+```text
+http://localhost:8080
 ```
 
-To learn how to interop with web APIs and other JS libraries,
-check out https://dart.dev/interop/js-interop.
+The database is created automatically. It also includes demo content and two
+users you can use right away:
+
+| Role | Email | Username | Password |
+| --- | --- | --- | --- |
+| Admin | `admin@example.com` | `admin` | `AdminPass123!` |
+| Reader | `reader@example.com` | `reader` | `ReaderPass123!` |
+
+Use the admin account to open the admin area:
+
+```text
+http://localhost:8080/admin
+```
+
+### 4. Stop the blog
+
+Press `Ctrl+C` in the terminal running Docker Compose, then run:
+
+```shell
+docker compose down
+```
+
+### 5. Start again later
+
+Use the same command again whenever you want to start the blog:
+
+```shell
+docker compose up --build
+```
+
+Your database data is kept in a Docker volume, so posts and users remain after
+stopping the containers.
+
+### 6. Reset the database only when needed
+
+If you want to delete all local database data and return to the demo content,
+run:
+
+```shell
+docker compose down -v
+docker compose up --build
+```
 
 ## Performance testing
 
