@@ -1,0 +1,88 @@
+name: personal_blog_performance
+
+services:
+  app:
+    build:
+      context: .
+    environment:
+      PORT: 8080
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: blog_perf_db
+      DB_USER: perf_user
+      DB_PASSWORD: perf_password
+    ports:
+      - '${PERF_APP_PORT:-8081}:8080'
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: blog_perf_db
+      POSTGRES_USER: perf_user
+      POSTGRES_PASSWORD: perf_password
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    volumes:
+      - perf_db_data:/var/lib/postgresql
+
+  wrk:
+    build:
+      context: .
+      dockerfile: scripts/performance/Dockerfile
+    depends_on:
+      app:
+        condition: service_started
+    environment:
+      TARGET_URL: http://app:8080
+      WRK_THREADS: ${WRK_THREADS:-4}
+      WRK_CONNECTIONS: ${WRK_CONNECTIONS:-64}
+      WRK_DURATION: ${WRK_DURATION:-30s}
+      WRK_TIMEOUT: ${WRK_TIMEOUT:-5s}
+      WRK_PATHS: ${WRK_PATHS:-}
+    volumes:
+      - ./scripts/performance:/scripts/performance:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        ready=false
+        echo "Waiting for $${TARGET_URL} to serve seeded pages..."
+        for attempt in $$(seq 1 60); do
+          if curl -fsS "$${TARGET_URL}/" >/dev/null && \
+            curl -fsS "$${TARGET_URL}/blog/building-a-calmer-personal-blog" >/dev/null; then
+            ready=true
+            echo 'Application is ready.'
+            break
+          fi
+          echo "Attempt $${attempt}: application is not ready yet."
+          sleep 2
+        done
+
+        if [ "$${ready}" != true ]; then
+          echo 'Application did not become ready in time.' >&2
+          exit 1
+        fi
+
+        echo "Running wrk against $${TARGET_URL}"
+        echo "threads=$${WRK_THREADS} connections=$${WRK_CONNECTIONS} duration=$${WRK_DURATION} timeout=$${WRK_TIMEOUT}"
+        exec wrk \
+          -t"$${WRK_THREADS}" \
+          -c"$${WRK_CONNECTIONS}" \
+          -d"$${WRK_DURATION}" \
+          --timeout "$${WRK_TIMEOUT}" \
+          --latency \
+          -s /scripts/performance/request_mix.lua \
+          "$${TARGET_URL}"
+
+volumes:
+  perf_db_data:

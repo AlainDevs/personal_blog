@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "build:css": "tailwindcss -i web/input.css -o web/output.css",
-    "watch:css": "tailwindcss -i web/input.css -o web/output.css --watch"
+    "watch:css": "tailwindcss -i web/input.css -o web/output.css --watch",
+    "performance:report": "node scripts/performance/generate_report.js",
+    "performance:report:smoke": "WRK_THREADS=1 WRK_CONNECTIONS=4 WRK_DURATION=2s node scripts/performance/generate_report.js"
   },
   "keywords": [],
   "author": "",
