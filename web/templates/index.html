@@ -1,20 +1,75 @@
-<h1>Welcome to the Personal Blog!</h1>
-
-{{#posts}}
-<div class="bg-white shadow-md rounded-lg p-6 mb-4">
-    <h2 class="text-xl font-semibold mb-2">
-        <a href="/blog/{{slug}}" class="text-blue-600 hover:underline">{{title}}</a>
-    </h2>
-    <p class="text-gray-600 text-sm mb-2">
-        By {{author.username}} on {{createdAt}}
-    </p>
-    <div class="prose max-w-none">
-        {{{contentHtml}}}
+<section class="grid gap-10 lg:grid-cols-[1.08fr_0.92fr] lg:items-center">
+  <div>
+    <p class="mb-4 inline-flex rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-sm font-semibold text-cyan-100">A small, beautiful blog for thoughtful notes</p>
+    <h1 class="max-w-3xl text-5xl font-black leading-tight tracking-tight text-white sm:text-6xl">Write quietly. Share clearly. Keep the conversation human.</h1>
+    <p class="mt-6 max-w-2xl text-lg leading-8 text-slate-300">This demo personal blog uses server-rendered Mustache templates, Tailwind CSS, Dart Shelf routes, login/register flows, admin settings, and authenticated comments.</p>
+    <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+      <a href="#latest" class="rounded-full bg-cyan-400 px-6 py-3 text-center font-bold text-slate-950 shadow-xl shadow-cyan-500/20 transition hover:-translate-y-0.5 hover:bg-cyan-300">Read latest posts</a>
+      {{^isAuthenticated}}
+      {{#registrationEnabled}}
+      <a href="/register" class="rounded-full border border-white/15 px-6 py-3 text-center font-bold text-white transition hover:-translate-y-0.5 hover:bg-white/10">Join the comments</a>
+      {{/registrationEnabled}}
+      {{/isAuthenticated}}
     </div>
-    <a href="/blog/{{slug}}" class="text-blue-600 hover:underline mt-2 inline-block">Read More</a>
-</div>
-{{/posts}}
+  </div>
 
-{{^posts}}
-<p>No posts yet. Stay tuned!</p>
-{{/posts}}
+  <aside class="rounded-[2rem] border border-white/10 bg-white/10 p-6 shadow-2xl shadow-black/30 backdrop-blur">
+    <div class="rounded-[1.5rem] bg-slate-950/80 p-6 ring-1 ring-white/10">
+      <p class="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200">Demo details</p>
+      <dl class="mt-6 grid gap-4 text-sm">
+        <div class="rounded-2xl bg-white/5 p-4">
+          <dt class="text-slate-400">Example posts</dt>
+          <dd class="mt-1 text-2xl font-black text-white">{{postCount}}</dd>
+        </div>
+        <div class="rounded-2xl bg-white/5 p-4">
+          <dt class="text-slate-400">Registration</dt>
+          <dd class="mt-1 font-bold text-white">{{#registrationEnabled}}Open{{/registrationEnabled}}{{^registrationEnabled}}Paused by admin{{/registrationEnabled}}</dd>
+        </div>
+        <div class="rounded-2xl bg-white/5 p-4">
+          <dt class="text-slate-400">Stack</dt>
+          <dd class="mt-1 font-bold text-white">Shelf · PostgreSQL · Tailwind</dd>
+        </div>
+      </dl>
+    </div>
+  </aside>
+</section>
+
+<section id="latest" class="mt-16">
+  <div class="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <p class="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200">Latest writing</p>
+      <h2 class="mt-2 text-3xl font-black text-white">Recent posts</h2>
+    </div>
+    {{#isAdmin}}
+    <a href="/admin/posts/new" class="rounded-full border border-white/15 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-white/10">Create a post</a>
+    {{/isAdmin}}
+  </div>
+
+  {{#hasPosts}}
+  <div class="grid gap-6 md:grid-cols-2">
+    {{#posts}}
+    <article class="group rounded-[1.75rem] border border-white/10 bg-white/[0.08] p-6 shadow-2xl shadow-black/20 transition hover:-translate-y-1 hover:border-cyan-300/40 hover:bg-white/[0.12]">
+      <div class="mb-5 flex flex-wrap items-center gap-2">
+        {{#categories}}
+        <span class="rounded-full bg-cyan-300/10 px-3 py-1 text-xs font-bold text-cyan-100 ring-1 ring-cyan-300/20">{{name}}</span>
+        {{/categories}}
+        <span class="rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-slate-300">{{readingMinutes}} min read</span>
+      </div>
+      <h3 class="text-2xl font-black leading-tight text-white">
+        <a href="/blog/{{slug}}" class="hover:text-cyan-200">{{title}}</a>
+      </h3>
+      <p class="mt-3 text-sm text-slate-400">By {{author.username}} · {{createdAt}}</p>
+      <p class="mt-4 leading-7 text-slate-300">{{excerpt}}</p>
+      <a href="/blog/{{slug}}" class="mt-6 inline-flex items-center gap-2 font-bold text-cyan-200 transition group-hover:gap-3">Read the post <span aria-hidden="true">→</span></a>
+    </article>
+    {{/posts}}
+  </div>
+  {{/hasPosts}}
+
+  {{^hasPosts}}
+  <div class="rounded-[1.75rem] border border-dashed border-white/15 bg-white/[0.06] p-10 text-center">
+    <h3 class="text-2xl font-black text-white">No posts yet</h3>
+    <p class="mt-3 text-slate-300">Seed data will appear after the database starts and the server initializes.</p>
+  </div>
+  {{/hasPosts}}
+</section>

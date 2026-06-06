@@ -1,97 +1,36 @@
-<h1 class="text-3xl font-bold mb-6">{{#post}}Edit Post{{/post}}{{^post}}Create New Post{{/post}}</h1>
+<section class="mx-auto max-w-4xl space-y-8">
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <p class="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200">Admin</p>
+      <h1 class="mt-2 text-4xl font-black text-white">{{#post}}Edit post{{/post}}{{^post}}Create post{{/post}}</h1>
+    </div>
+    <a href="/admin/posts" class="rounded-full border border-white/15 px-5 py-3 text-center font-bold text-white transition hover:bg-white/10">All posts</a>
+  </div>
 
-<div class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
-    <form id="postForm">
-        <input type="hidden" id="postId" value="{{post.id}}">
-        <div class="mb-4">
-            <label for="title" class="block text-gray-700 text-sm font-bold mb-2">Title:</label>
-            <input type="text" id="title" name="title" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" value="{{post.title}}" required>
-        </div>
-        <div class="mb-4">
-            <label for="slug" class="block text-gray-700 text-sm font-bold mb-2">Slug:</label>
-            <input type="text" id="slug" name="slug" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" value="{{post.slug}}" required>
-        </div>
-        <div class="mb-4">
-            <label for="contentMarkdown" class="block text-gray-700 text-sm font-bold mb-2">Content (Markdown):</label>
-            <textarea id="contentMarkdown" name="contentMarkdown" rows="15" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>{{post.contentMarkdown}}</textarea>
-        </div>
-        <div class="mb-6">
-            <label class="block text-gray-700 text-sm font-bold mb-2">
-                <input type="checkbox" id="published" name="published" class="mr-2 leading-tight" {{#post.published}}checked{{/post.published}}>
-                <span class="text-sm">Published</span>
-            </label>
-        </div>
-        <div class="flex items-center justify-between">
-            <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-                {{#post}}Update Post{{/post}}{{^post}}Create Post{{/post}}
-            </button>
-            <a href="/admin" class="inline-block align-baseline font-bold text-sm text-gray-500 hover:text-gray-800">
-                Cancel
-            </a>
-        </div>
-        <p id="errorMessage" class="text-red-500 text-xs italic mt-4"></p>
+  <div class="rounded-[2rem] border border-white/10 bg-slate-900/90 p-6 shadow-2xl shadow-black/30 sm:p-8">
+    <form id="postForm" class="space-y-5">
+      <input type="hidden" id="postId" value="{{post.id}}">
+      <div>
+        <label for="title" class="mb-2 block text-sm font-bold text-slate-200">Title</label>
+        <input type="text" id="title" name="title" value="{{post.title}}" class="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10" required>
+      </div>
+      <div>
+        <label for="slug" class="mb-2 block text-sm font-bold text-slate-200">Slug</label>
+        <input type="text" id="slug" name="slug" value="{{post.slug}}" class="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100 outline-none transition focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10" required>
+      </div>
+      <div>
+        <label for="contentMarkdown" class="mb-2 block text-sm font-bold text-slate-200">Content Markdown</label>
+        <textarea id="contentMarkdown" name="content_markdown" rows="16" class="w-full rounded-3xl border border-white/10 bg-slate-950/70 px-5 py-4 font-mono text-sm text-slate-100 outline-none transition focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10" required>{{post.contentMarkdown}}</textarea>
+      </div>
+      <label class="flex cursor-pointer items-center gap-3 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10">
+        <input type="checkbox" id="published" name="published" class="h-5 w-5 rounded border-white/10 bg-slate-950 text-cyan-400" {{#post.published}}checked{{/post.published}}>
+        <span class="font-bold text-slate-200">Publish this post</span>
+      </label>
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <button type="submit" class="rounded-full bg-cyan-400 px-6 py-3 font-bold text-slate-950 shadow-xl shadow-cyan-500/20 transition hover:bg-cyan-300">{{#post}}Update post{{/post}}{{^post}}Create post{{/post}}</button>
+        <a href="/admin/posts" class="rounded-full border border-white/15 px-6 py-3 text-center font-bold text-white transition hover:bg-white/10">Cancel</a>
+        <p id="postMessage" class="text-sm font-semibold text-slate-300" role="status"></p>
+      </div>
     </form>
-</div>
-
-<script>
-    document.getElementById('postForm').addEventListener('submit', async function(event) {
-        event.preventDefault();
-
-        const postId = document.getElementById('postId').value;
-        const title = document.getElementById('title').value;
-        const slug = document.getElementById('slug').value;
-        const contentMarkdown = document.getElementById('contentMarkdown').value;
-        const published = document.getElementById('published').checked;
-        const errorMessage = document.getElementById('errorMessage');
-
-        errorMessage.textContent = '';
-
-        // TODO: Get token and user ID from localStorage or session
-        const token = localStorage.getItem('token');
-        // For now, hardcoding a user ID for testing. This should come from JWT.
-        const userId = 1; 
-
-        if (!token || !userId) {
-            errorMessage.textContent = 'You must be logged in to create/edit posts.';
-            return;
-        }
-
-        const postData = {
-            user_id: userId, // Only needed for creation
-            title,
-            slug,
-            content_markdown: contentMarkdown,
-            published,
-        };
-
-        let url = '/api/admin/posts';
-        let method = 'POST';
-
-        if (postId) {
-            url = `/api/admin/posts/${postId}`;
-            method = 'PUT';
-        }
-
-        try {
-            const response = await fetch(url, {
-                method: method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(postData),
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                window.location.href = '/admin'; // Redirect to admin dashboard
-            } else {
-                errorMessage.textContent = data.message || 'Operation failed.';
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            errorMessage.textContent = 'An unexpected error occurred.';
-        }
-    });
-</script>
+  </div>
+</section>

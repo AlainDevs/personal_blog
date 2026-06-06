@@ -1,316 +1,355 @@
+import 'dart:developer' as developer;
 import 'dart:io';
-import 'dart:convert';
 
+import 'package:personal_blog/handlers/auth_handler.dart';
+import 'package:personal_blog/handlers/category_handler.dart';
+import 'package:personal_blog/handlers/comment_handler.dart';
+import 'package:personal_blog/handlers/post_handler.dart';
+import 'package:personal_blog/handlers/settings_handler.dart';
+import 'package:personal_blog/services/category_service.dart';
 import 'package:personal_blog/services/comment_service.dart';
 import 'package:personal_blog/services/post_service.dart';
+import 'package:personal_blog/services/settings_service.dart';
 import 'package:personal_blog/services/user_service.dart';
-import 'package:personal_blog/services/category_service.dart';
 import 'package:personal_blog/utils/auth_utils.dart';
+import 'package:personal_blog/utils/db_utils.dart';
+import 'package:personal_blog/utils/request_utils.dart';
 import 'package:personal_blog/utils/template_manager.dart';
-import 'package:personal_blog/handlers/auth_handler.dart';
-import 'package:personal_blog/handlers/post_handler.dart';
-import 'package:personal_blog/handlers/comment_handler.dart';
-import 'package:personal_blog/handlers/category_handler.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart';
-import 'package:shelf_static/shelf_static.dart';
 import 'package:shelf_router/shelf_router.dart';
+import 'package:shelf_static/shelf_static.dart';
 
-// Configure a pipeline that logs requests.
-final _router = Router();
-final _templateManager = TemplateManager('web/templates');
+const String _htmlContentType = 'text/html; charset=utf-8';
+const String _cssContentType = 'text/css; charset=utf-8';
 
-// Refactored to use a function declaration for the middleware.
-final _handler = const Pipeline()
-    .addMiddleware(logRequests())
-    .addMiddleware(createAuthMiddleware()) // Add authentication middleware
-    .addHandler(_router.call);
+final TemplateManager _templateManager = TemplateManager('web/templates');
 
-// Refactored to use nested function declarations to align with Dart best practices.
+/// Creates the Shelf handler used by the executable and tests.
+Handler createAppHandler({
+  UserService? userService,
+  PostService? postService,
+  CommentService? commentService,
+  CategoryService? categoryService,
+  SettingsService? settingsService,
+}) {
+  final users = userService ?? UserService();
+  final posts = postService ?? PostService();
+  final comments = commentService ?? CommentService();
+  final categories = categoryService ?? CategoryService();
+  final settings = settingsService ?? SettingsService();
+  final router = Router();
+
+  _mountApiRoutes(router, users, posts, comments, categories, settings);
+  _mountStaticRoutes(router);
+  _mountPageRoutes(router, users, posts, comments, categories, settings);
+
+  return const Pipeline()
+      .addMiddleware(logRequests())
+      .addMiddleware(createAuthMiddleware())
+      .addHandler(router.call);
+}
+
+/// Middleware that attaches valid JWT context and protects private routes.
 Middleware createAuthMiddleware() {
-  Handler middleware(Handler inner) {
-    Future<Response> requestHandler(Request request) async {
-      // Skip authentication for public routes (login, register, static files, public blog posts)
-      if (request.url.path.startsWith('api/auth/') ||
-          request.url.path.startsWith('public/') ||
-          request.url.path == '/' ||
-          request.url.path.startsWith('blog/') ||
-          request.url.path.startsWith('login') ||
-          request.url.path.startsWith('register') ||
-          request.url.path.endsWith('.css') ||
-          request.url.path.endsWith('.js') ||
-          request.url.path.endsWith('.ico') ||
-          request.url.path.endsWith('.png') ||
-          request.url.path.endsWith('.jpg') ||
-          request.url.path.endsWith('.jpeg') ||
-          request.url.path.endsWith('.gif') ||
-          request.url.path.endsWith('.svg')) {
-        return inner(request);
+  return (inner) {
+    return (request) async {
+      final token = AuthUtils.extractTokenFromHeaders(request.headers);
+      final claim = token == null ? null : AuthUtils.verifyJwt(token);
+      var updatedRequest = request;
+
+      if (claim != null) {
+        final userId = int.tryParse(claim.subject ?? '');
+        if (userId != null) {
+          updatedRequest = request.change(
+            context: {
+              'auth_user_id': userId,
+              'auth_user_role': (claim['role'] ?? 'user').toString(),
+              'auth_username': claim['username']?.toString(),
+            },
+          );
+        }
       }
 
-      final authHeader = request.headers['Authorization'];
-      if (authHeader == null || !authHeader.startsWith('Bearer ')) {
-        return Response.forbidden(
-          jsonEncode({'message': 'Authentication required'}),
-        );
+      final path = updatedRequest.url.path;
+      if (_isProtectedAdminPage(path) && !isAdminRequest(updatedRequest)) {
+        return Response.found('/login');
       }
 
-      final token = authHeader.substring(7);
-      final claim = AuthUtils.verifyJwt(token);
-
-      if (claim == null) {
-        return Response.forbidden(
-          jsonEncode({'message': 'Invalid or expired token'}),
-        );
+      if (_isProtectedAdminApi(path) && !isAdminRequest(updatedRequest)) {
+        return jsonResponse({
+          'message': 'Admin access required.',
+        }, statusCode: 403);
       }
 
-      // Attach user ID and role to the request context
-      final userId = int.parse(claim.subject!);
-      final userRole = claim.payload['role'] ?? 'user'; // Access 'role' safely
-      final updatedRequest = request.change(
-        context: {'auth_user_id': userId, 'auth_user_role': userRole},
-      );
+      if (_isProtectedCommentPost(updatedRequest) &&
+          authenticatedUserId(updatedRequest) == null) {
+        return jsonResponse({
+          'message': 'You must be logged in to comment.',
+        }, statusCode: 403);
+      }
 
       return inner(updatedRequest);
-    }
-
-    return requestHandler;
-  }
-
-  return middleware;
+    };
+  };
 }
 
 Future<void> main(List<String> args) async {
-  // Initialize services
-  final userService = UserService();
-  final postService = PostService();
-  final commentService = CommentService();
-  final categoryService = CategoryService();
-
-  // Initialize handlers
-  final authHandler = AuthHandler(userService);
-  final postHandler = PostHandler(postService);
-  final commentHandler = CommentHandler(commentService);
-  final categoryHandler = CategoryHandler(categoryService);
-
-  // Mount API handlers
-  _router.mount('/api/auth/', authHandler.router.call);
-  _router.mount('/api/', postHandler.router.call);
-  _router.mount('/api/', commentHandler.router.call);
-  _router.mount('/api/', categoryHandler.router.call);
-
-  // Serve static files from the 'web/public' directory with proper MIME types
-  _router.mount('/public/', createStaticHandler('web/public', defaultDocument: 'index.html'));
-  
-  // Serve CSS files with correct MIME type
-  _router.get('/output.css', (Request request) async {
-    final file = File('web/output.css');
-    if (await file.exists()) {
-      final content = await file.readAsString();
-      return Response.ok(content, headers: {'Content-Type': 'text/css'});
-    }
-    return Response.notFound('CSS file not found');
-  });
-
-  // Frontend routes (server-side rendered)
-  _router.get('/', (Request request) async {
-    final posts = await postService.getAllPosts(publishedOnly: true);
-    final data = {
-      'title': 'Home',
-      'posts':
-          posts
-              .map((p) => p.toMap())
-              .toList(),
-      'currentYear': DateTime.now().year,
-      'isAuthenticated': false, // TODO: Implement actual authentication check
-    };
-    final html = await _templateManager.render('layout', {
-      'title': data['title'],
-      'isAuthenticated': data['isAuthenticated'],
-      'currentYear': data['currentYear'],
-      'body': await _templateManager.render('index', data),
-    });
-    return Response.ok(html, headers: {'Content-Type': 'text/html'});
-  });
-
-  _router.get('/login', (Request request) async {
-    final html = await _templateManager.render('layout', {
-      'title': 'Login',
-      'isAuthenticated': false,
-      'currentYear': DateTime.now().year,
-      'body': await _templateManager.render('login', {}),
-    });
-    return Response.ok(html, headers: {'Content-Type': 'text/html'});
-  });
-
-  _router.get('/register', (Request request) async {
-    final html = await _templateManager.render('layout', {
-      'title': 'Register',
-      'isAuthenticated': false,
-      'currentYear': DateTime.now().year,
-      'body': await _templateManager.render('register', {}),
-    });
-    return Response.ok(html, headers: {'Content-Type': 'text/html'});
-  });
-
-  _router.get('/blog/<slug>', (Request request) async {
-    // FIX: Corrected the syntax error by splitting the statement into two lines.
-    final params =
-        request.context['shelf_router/params'] as Map<String, String>?;
-    final slug = params?['slug'];
-    if (slug == null) {
-      return Response.badRequest(body: 'Post slug is required');
-    }
-    final post = await postService.getPostBySlug(slug);
-    if (post == null) {
-      return Response.notFound('Post not found');
-    }
-    final comments = await commentService.getCommentsForPost(post.id!);
-    final data = {
-      'title': post.title,
-      'post': post.toMap(),
-      'comments':
-          comments
-              .map((c) => c.toMap())
-              .toList(),
-      'currentYear': DateTime.now().year,
-      'isAuthenticated': false, // TODO: Implement actual authentication check
-    };
-    final html = await _templateManager.render('layout', {
-      'title': data['title'],
-      'isAuthenticated': data['isAuthenticated'],
-      'currentYear': data['currentYear'],
-      'body': await _templateManager.render('post_detail', data),
-    });
-    return Response.ok(html, headers: {'Content-Type': 'text/html'});
-  });
-
-  _router.get('/admin', (Request request) async {
-    // TODO: Implement authentication and authorization middleware
-    final html = await _templateManager.render('layout', {
-      'title': 'Admin Dashboard',
-      'isAuthenticated': true, // Assuming authenticated for admin pages
-      'currentYear': DateTime.now().year,
-      'body': await _templateManager.render('admin/dashboard', {}),
-    });
-    return Response.ok(html, headers: {'Content-Type': 'text/html'});
-  });
-
-  _router.get('/admin/posts', (Request request) async {
-    // TODO: Implement authentication and authorization middleware
-    final posts = await postService.getAllPosts(publishedOnly: false);
-    final data = {
-      'title': 'Manage Posts',
-      'posts':
-          posts
-              .map((p) => p.toMap())
-              .toList(),
-      'currentYear': DateTime.now().year,
-      'isAuthenticated': true,
-    };
-    final html = await _templateManager.render('layout', {
-      'title': data['title'],
-      'isAuthenticated': data['isAuthenticated'],
-      'currentYear': data['currentYear'],
-      'body': await _templateManager.render('admin/post_list', data),
-    });
-    return Response.ok(html, headers: {'Content-Type': 'text/html'});
-  });
-
-  _router.get('/admin/posts/new', (Request request) async {
-    // TODO: Implement authentication and authorization middleware
-    final html = await _templateManager.render('layout', {
-      'title': 'Create New Post',
-      'isAuthenticated': true,
-      'currentYear': DateTime.now().year,
-      'body': await _templateManager.render('admin/post_editor', {
-        'post': null,
-      }),
-    });
-    return Response.ok(html, headers: {'Content-Type': 'text/html'});
-  });
-
-  _router.get('/admin/posts/<id>/edit', (Request request) async {
-    // TODO: Implement authentication and authorization middleware
-    // FIX: Safely accessed router parameters to prevent potential null exceptions.
-    final params =
-        request.context['shelf_router/params'] as Map<String, String>?;
-    final postIdString = params?['id'];
-
-    if (postIdString == null) {
-      return Response.badRequest(body: 'Invalid post ID');
-    }
-    final postId = int.tryParse(postIdString);
-
-    if (postId == null) {
-      return Response.badRequest(body: 'Invalid post ID');
-    }
-    final post = await postService.getPostById(postId);
-    if (post == null) {
-      return Response.notFound('Post not found');
-    }
-    final data = {
-      'title': 'Edit Post',
-      'post': post.toMap(),
-      'currentYear': DateTime.now().year,
-      'isAuthenticated': true,
-    };
-    final html = await _templateManager.render('layout', {
-      'title': data['title'],
-      'isAuthenticated': data['isAuthenticated'],
-      'currentYear': data['currentYear'],
-      'body': await _templateManager.render('admin/post_editor', data),
-    });
-    return Response.ok(html, headers: {'Content-Type': 'text/html'});
-  });
-
-  _router.get('/admin/categories', (Request request) async {
-    // TODO: Implement authentication and authorization middleware
-    final categories = await categoryService.getAllCategories();
-    final data = {
-      'title': 'Manage Categories',
-      'categories':
-          categories
-              .map((c) => c.toMap())
-              .toList(),
-      'currentYear': DateTime.now().year,
-      'isAuthenticated': true,
-    };
-    final html = await _templateManager.render('layout', {
-      'title': data['title'],
-      'isAuthenticated': data['isAuthenticated'],
-      'currentYear': data['currentYear'],
-      'body': await _templateManager.render('admin/category_list', data),
-    });
-    return Response.ok(html, headers: {'Content-Type': 'text/html'});
-  });
-
-  _router.get('/admin/users', (Request request) async {
-    // TODO: Implement authentication and authorization middleware
-    // For simplicity, fetching all users. In a real app, pagination/filtering would be needed.
-    final users =
-        await userService
-            .getAllUsers(); // Assuming a getAllUsers method in UserService
-    final data = {
-      'title': 'Manage Users',
-      // FIX: Removed unnecessary cast `(u as User)`.
-      'users': users.map((u) => u.toMap()).toList(),
-      'currentYear': DateTime.now().year,
-      'isAuthenticated': true,
-    };
-    final html = await _templateManager.render('layout', {
-      'title': data['title'],
-      'isAuthenticated': data['isAuthenticated'],
-      'currentYear': data['currentYear'],
-      'body': await _templateManager.render('admin/user_list', data),
-    });
-    return Response.ok(html, headers: {'Content-Type': 'text/html'});
-  });
+  await DatabaseConnection.initialize();
 
   final ip = InternetAddress.anyIPv4;
+  final port = int.tryParse(Platform.environment['PORT'] ?? '') ?? 8080;
+  final server = await serve(createAppHandler(), ip, port);
 
-  // For running in containers, we respect the PORT environment variable.
-  final port = int.parse(Platform.environment['PORT'] ?? '8080');
-  final server = await serve(_handler, ip, port);
-  print('Server listening on port ${server.port}');
+  developer.log(
+    'Server listening on port ${server.port}.',
+    name: 'personal_blog.server',
+  );
+}
+
+void _mountApiRoutes(
+  Router router,
+  UserService userService,
+  PostService postService,
+  CommentService commentService,
+  CategoryService categoryService,
+  SettingsService settingsService,
+) {
+  router.mount(
+    '/api/auth/',
+    AuthHandler(userService, settingsService).router.call,
+  );
+  router.mount('/api/', PostHandler(postService).router.call);
+  router.mount('/api/', CommentHandler(commentService).router.call);
+  router.mount('/api/', CategoryHandler(categoryService).router.call);
+  router.mount('/api/', SettingsHandler(settingsService).router.call);
+}
+
+void _mountStaticRoutes(Router router) {
+  router.mount(
+    '/public/',
+    createStaticHandler('web/public', defaultDocument: 'index.html'),
+  );
+
+  router.get('/output.css', (request) async {
+    final file = File('web/output.css');
+    if (!await file.exists()) {
+      return Response.notFound('CSS file not found');
+    }
+
+    return Response.ok(
+      await file.readAsString(),
+      headers: {'Content-Type': _cssContentType},
+    );
+  });
+}
+
+void _mountPageRoutes(
+  Router router,
+  UserService userService,
+  PostService postService,
+  CommentService commentService,
+  CategoryService categoryService,
+  SettingsService settingsService,
+) {
+  router.get('/', (request) async {
+    final posts = await postService.getAllPosts(publishedOnly: true);
+    final data = await _pageData(request, settingsService, title: 'Home');
+    data.addAll({
+      'posts': posts.map((post) => post.toMap()).toList(),
+      'hasPosts': posts.isNotEmpty,
+      'postCount': posts.length,
+    });
+    return _renderPage('index', data);
+  });
+
+  router.get('/login', (request) async {
+    if (authenticatedUserId(request) != null) {
+      return Response.found('/');
+    }
+
+    final data = await _pageData(request, settingsService, title: 'Login');
+    return _renderPage('login', data);
+  });
+
+  router.get('/logout', (request) {
+    return Response.found(
+      '/',
+      headers: {'Set-Cookie': AuthUtils.clearAuthCookie()},
+    );
+  });
+
+  router.get('/register', (request) async {
+    if (authenticatedUserId(request) != null) {
+      return Response.found('/');
+    }
+
+    final data = await _pageData(request, settingsService, title: 'Register');
+    return _renderPage('register', data);
+  });
+
+  router.get('/blog/<slug>', (request) async {
+    final slug = request.params['slug'];
+    if (slug == null) {
+      return Response.badRequest(body: 'Post slug is required.');
+    }
+
+    final post = await postService.getPostBySlug(slug);
+    if (post == null) {
+      return Response.notFound('Post not found.');
+    }
+
+    final postId = post.id;
+    if (postId == null) {
+      return Response.internalServerError(body: 'Post is missing an id.');
+    }
+
+    final comments = await commentService.getCommentsForPost(postId);
+    final data = await _pageData(request, settingsService, title: post.title);
+    data.addAll({
+      'post': post.toMap(),
+      'comments': comments.map((comment) => comment.toMap()).toList(),
+      'hasComments': comments.isNotEmpty,
+      'commentCount': comments.length,
+    });
+    return _renderPage('post_detail', data);
+  });
+
+  router.get('/admin', (request) async {
+    final data = await _pageData(
+      request,
+      settingsService,
+      title: 'Admin Dashboard',
+    );
+    return _renderPage('admin/dashboard', data);
+  });
+
+  router.get('/admin/posts', (request) async {
+    final posts = await postService.getAllPosts(publishedOnly: false);
+    final data = await _pageData(
+      request,
+      settingsService,
+      title: 'Manage Posts',
+    );
+    data.addAll({
+      'posts': posts.map((post) => post.toMap()).toList(),
+      'hasPosts': posts.isNotEmpty,
+    });
+    return _renderPage('admin/post_list', data);
+  });
+
+  router.get('/admin/posts/new', (request) async {
+    final data = await _pageData(
+      request,
+      settingsService,
+      title: 'Create New Post',
+    );
+    data['post'] = null;
+    return _renderPage('admin/post_editor', data);
+  });
+
+  router.get('/admin/posts/<id>/edit', (request) async {
+    final postId = readPathInt(request, 'id');
+    if (postId == null) {
+      return Response.badRequest(body: 'Invalid post id.');
+    }
+
+    final post = await postService.getPostById(postId);
+    if (post == null) {
+      return Response.notFound('Post not found.');
+    }
+
+    final data = await _pageData(request, settingsService, title: 'Edit Post');
+    data['post'] = post.toMap();
+    return _renderPage('admin/post_editor', data);
+  });
+
+  router.get('/admin/categories', (request) async {
+    final categories = await categoryService.getAllCategories();
+    final data = await _pageData(
+      request,
+      settingsService,
+      title: 'Manage Categories',
+    );
+    data.addAll({
+      'categories': categories.map((category) => category.toMap()).toList(),
+      'hasCategories': categories.isNotEmpty,
+    });
+    return _renderPage('admin/category_list', data);
+  });
+
+  router.get('/admin/users', (request) async {
+    final users = await userService.getAllUsers();
+    final data = await _pageData(
+      request,
+      settingsService,
+      title: 'Manage Users',
+    );
+    data.addAll({
+      'users': users.map((user) => user.toPublicMap()).toList(),
+      'hasUsers': users.isNotEmpty,
+    });
+    return _renderPage('admin/user_list', data);
+  });
+
+  router.get('/admin/settings', (request) async {
+    final data = await _pageData(request, settingsService, title: 'Settings');
+    return _renderPage('admin/settings', data);
+  });
+}
+
+Future<Response> _renderPage(
+  String templateName,
+  Map<String, dynamic> data,
+) async {
+  final body = await _templateManager.render(templateName, data);
+  final html = await _templateManager.render('layout', {...data, 'body': body});
+
+  return Response.ok(html, headers: {'Content-Type': _htmlContentType});
+}
+
+Future<Map<String, dynamic>> _pageData(
+  Request request,
+  SettingsService settingsService, {
+  required String title,
+}) async {
+  final currentUser = _currentUserMap(request);
+  final registrationEnabled = await settingsService.isRegistrationEnabled();
+
+  return {
+    'title': title,
+    'currentYear': DateTime.now().year,
+    'isAuthenticated': currentUser != null,
+    'isAdmin': isAdminRequest(request),
+    'currentUser': currentUser,
+    'registrationEnabled': registrationEnabled,
+    'registrationDisabled': !registrationEnabled,
+  };
+}
+
+Map<String, dynamic>? _currentUserMap(Request request) {
+  final userId = authenticatedUserId(request);
+  if (userId == null) {
+    return null;
+  }
+
+  return {
+    'id': userId,
+    'username': request.context['auth_username'] ?? 'Reader',
+    'role': authenticatedUserRole(request) ?? 'user',
+    'isAdmin': isAdminRequest(request),
+  };
+}
+
+bool _isProtectedAdminPage(String path) {
+  return path == 'admin' || path.startsWith('admin/');
+}
+
+bool _isProtectedAdminApi(String path) {
+  return path.startsWith('api/admin/') || path.startsWith('api/comments/');
+}
+
+bool _isProtectedCommentPost(Request request) {
+  return request.method.toUpperCase() == 'POST' &&
+      RegExp(r'^api/posts/\d+/comments$').hasMatch(request.url.path);
 }

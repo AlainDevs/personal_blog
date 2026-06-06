@@ -1,59 +1,97 @@
-import 'dart:convert';
+import 'dart:developer' as developer;
+
+import 'package:personal_blog/services/comment_service.dart';
+import 'package:personal_blog/utils/request_utils.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
-import 'package:personal_blog/services/comment_service.dart';
 
+/// Handles comment API requests.
 class CommentHandler {
-  final CommentService _commentService;
-
+  /// Creates a comment handler.
   CommentHandler(this._commentService);
 
+  final CommentService _commentService;
+
+  /// API router for comment endpoints.
   Router get router {
     final router = Router();
 
     router.get('/posts/<postId>/comments', _getCommentsForPost);
-    router.post('/posts/<postId>/comments', _addComment); // Requires authentication
-    router.delete('/comments/<commentId>', _deleteComment); // Requires authentication and admin/owner role
+    router.post('/posts/<postId>/comments', _addComment);
+    router.delete('/comments/<commentId>', _deleteComment);
 
     return router;
   }
 
   Future<Response> _getCommentsForPost(Request request) async {
-    final postId = int.parse(request.params['postId']!);
+    final postId = readPathInt(request, 'postId');
+    if (postId == null) {
+      return jsonResponse({'message': 'Invalid post id.'}, statusCode: 400);
+    }
+
     final comments = await _commentService.getCommentsForPost(postId);
-    return Response.ok(jsonEncode(comments.map((c) => c.toMap()).toList()));
+    return jsonResponse(comments.map((comment) => comment.toMap()).toList());
   }
 
   Future<Response> _addComment(Request request) async {
-    // TODO: Implement authentication middleware to get userId
-    final postId = int.parse(request.params['postId']!);
-    final payload = jsonDecode(await request.readAsString());
-    final userId = payload['user_id']; // This should come from authenticated user
-    final content = payload['content'];
+    final postId = readPathInt(request, 'postId');
+    final userId = authenticatedUserId(request);
+    final payload = await readJsonObject(request);
 
-    if (userId == null || content == null) {
-      return Response.badRequest(body: jsonEncode({'message': 'Missing required fields'}));
+    if (postId == null || userId == null || payload == null) {
+      return jsonResponse({
+        'message': 'Invalid comment request.',
+      }, statusCode: 400);
+    }
+
+    final content = readRequiredString(payload, 'content');
+    if (content == null) {
+      return jsonResponse({
+        'message': 'Comment content is required.',
+      }, statusCode: 400);
     }
 
     try {
       final comment = await _commentService.addComment(postId, userId, content);
-      return Response.ok(jsonEncode(comment.toMap()));
-    } catch (e) {
-      print('Error adding comment: $e');
-      return Response.internalServerError(body: jsonEncode({'message': 'Failed to add comment'}));
+      return jsonResponse(comment.toMap(), statusCode: 201);
+    } on Object catch (error, stackTrace) {
+      developer.log(
+        'Failed to add comment.',
+        name: 'personal_blog.comments',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return jsonResponse({
+        'message': 'Failed to add comment.',
+      }, statusCode: 500);
     }
   }
 
   Future<Response> _deleteComment(Request request) async {
-    // TODO: Implement authentication and authorization middleware
-    final commentId = int.parse(request.params['commentId']!);
+    if (!isAdminRequest(request)) {
+      return jsonResponse({
+        'message': 'Admin access required.',
+      }, statusCode: 403);
+    }
+
+    final commentId = readPathInt(request, 'commentId');
+    if (commentId == null) {
+      return jsonResponse({'message': 'Invalid comment id.'}, statusCode: 400);
+    }
 
     try {
       await _commentService.deleteComment(commentId);
-      return Response.ok(jsonEncode({'message': 'Comment deleted successfully'}));
-    } catch (e) {
-      print('Error deleting comment: $e');
-      return Response.internalServerError(body: jsonEncode({'message': 'Failed to delete comment'}));
+      return jsonResponse({'message': 'Comment deleted successfully.'});
+    } on Object catch (error, stackTrace) {
+      developer.log(
+        'Failed to delete comment.',
+        name: 'personal_blog.comments',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return jsonResponse({
+        'message': 'Failed to delete comment.',
+      }, statusCode: 500);
     }
   }
 }

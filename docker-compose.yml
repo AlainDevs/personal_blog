@@ -6,7 +6,7 @@ services:
     depends_on:
       - db
   db:
-    image: postgres
+    image: postgres:18
     restart: always
     environment:
       - POSTGRES_DB=blog_db
@@ -15,6 +15,6 @@ services:
     ports:
       - '5432:5432'
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql
 volumes:
   db_data:

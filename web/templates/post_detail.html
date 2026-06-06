@@ -1,80 +1,71 @@
-<div class="bg-white shadow-md rounded-lg p-6 mb-4">
-    <h1 class="text-3xl font-bold mb-2">{{post.title}}</h1>
-    <p class="text-gray-600 text-sm mb-4">
-        By {{post.author.username}} on {{post.createdAt}}
-        {{#post.categories}}
-        <span class="inline-block bg-blue-200 text-blue-800 text-xs px-2 rounded-full ml-2">{{name}}</span>
-        {{/post.categories}}
-    </p>
-    <div class="prose max-w-none mb-6">
-        {{{post.contentHtml}}}
+<article class="mx-auto max-w-4xl">
+  <a href="/" class="mb-8 inline-flex items-center gap-2 text-sm font-bold text-cyan-200 transition hover:text-cyan-100"><span aria-hidden="true">←</span> Back to all posts</a>
+
+  <header class="rounded-[2rem] border border-white/10 bg-white/[0.08] p-8 shadow-2xl shadow-black/25 sm:p-10">
+    <div class="mb-5 flex flex-wrap items-center gap-2">
+      {{#post.categories}}
+      <span class="rounded-full bg-cyan-300/10 px-3 py-1 text-xs font-bold text-cyan-100 ring-1 ring-cyan-300/20">{{name}}</span>
+      {{/post.categories}}
+      <span class="rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-slate-300">{{post.readingMinutes}} min read</span>
+    </div>
+    <h1 class="text-4xl font-black leading-tight tracking-tight text-white sm:text-5xl">{{post.title}}</h1>
+    <p class="mt-5 text-slate-400">By <span class="font-bold text-slate-200">{{post.author.username}}</span> · {{post.createdAt}}</p>
+  </header>
+
+  <div class="blog-content mt-8 rounded-[2rem] border border-white/10 bg-slate-900/80 p-8 shadow-2xl shadow-black/20 sm:p-10">
+    {{{post.contentHtml}}}
+  </div>
+
+  <section class="mt-10 rounded-[2rem] border border-white/10 bg-white/[0.08] p-6 shadow-2xl shadow-black/20 sm:p-8">
+    <div class="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <p class="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200">Conversation</p>
+        <h2 class="mt-2 text-3xl font-black text-white">Comments</h2>
+      </div>
+      <span class="rounded-full bg-white/10 px-4 py-2 text-sm font-bold text-slate-300">{{commentCount}} comments</span>
     </div>
 
-    <h2 class="text-2xl font-bold mb-4">Comments</h2>
-    {{#comments}}
-    <div class="bg-gray-100 p-4 rounded-lg mb-3">
-        <p class="text-gray-700">{{content}}</p>
-        <p class="text-gray-600 text-sm text-right">- {{author.username}} on {{createdAt}}</p>
+    {{#hasComments}}
+    <div class="space-y-4">
+      {{#comments}}
+      <div class="rounded-3xl bg-slate-950/60 p-5 ring-1 ring-white/10">
+        <p class="leading-7 text-slate-200">{{content}}</p>
+        <p class="mt-4 text-sm text-slate-400">— <span class="font-bold text-slate-200">{{author.username}}</span> on {{createdAt}}</p>
+      </div>
+      {{/comments}}
     </div>
-    {{/comments}}
-    {{^comments}}
-    <p>No comments yet. Be the first to comment!</p>
-    {{/comments}}
+    {{/hasComments}}
 
-    <h2 class="text-2xl font-bold mb-4 mt-6">Add a Comment</h2>
-    <form id="commentForm">
-        <div class="mb-4">
-            <label for="commentContent" class="block text-gray-700 text-sm font-bold mb-2">Your Comment:</label>
-            <textarea id="commentContent" name="commentContent" rows="4" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required></textarea>
+    {{^hasComments}}
+    <div class="rounded-3xl border border-dashed border-white/15 p-6 text-center text-slate-300">No comments yet. Start the conversation.</div>
+    {{/hasComments}}
+
+    <div class="mt-8 border-t border-white/10 pt-8">
+      {{#isAuthenticated}}
+      <form id="commentForm" data-post-id="{{post.id}}" class="space-y-4">
+        <div>
+          <label for="commentContent" class="mb-2 block text-sm font-bold text-slate-200">Add a comment</label>
+          <textarea id="commentContent" name="content" rows="5" class="w-full rounded-3xl border border-white/10 bg-slate-950/70 px-5 py-4 text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-300/10" placeholder="Share a thoughtful response..." required></textarea>
         </div>
-        <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-            Submit Comment
-        </button>
-        <p id="commentErrorMessage" class="text-red-500 text-xs italic mt-4"></p>
-    </form>
-</div>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <button type="submit" class="rounded-full bg-cyan-400 px-6 py-3 font-bold text-slate-950 shadow-xl shadow-cyan-500/20 transition hover:bg-cyan-300">Submit comment</button>
+          <p id="commentMessage" class="text-sm font-semibold text-slate-300" role="status"></p>
+        </div>
+      </form>
+      {{/isAuthenticated}}
 
-<script>
-    document.getElementById('commentForm').addEventListener('submit', async function(event) {
-        event.preventDefault();
-
-        const commentContent = document.getElementById('commentContent').value;
-        const commentErrorMessage = document.getElementById('commentErrorMessage');
-        const postId = "{{post.id}}"; // Assuming post.id is available in the template context
-
-        commentErrorMessage.textContent = '';
-
-        // TODO: Get token and user ID from localStorage or session
-        const token = localStorage.getItem('token');
-        // For now, hardcoding a user ID for testing. This should come from JWT.
-        const userId = 1; 
-
-        if (!token || !userId) {
-            commentErrorMessage.textContent = 'You must be logged in to comment.';
-            return;
-        }
-
-        try {
-            const response = await fetch(`/api/posts/${postId}/comments`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ user_id: userId, content: commentContent }),
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                // Reload page or dynamically add comment
-                location.reload(); 
-            } else {
-                commentErrorMessage.textContent = data.message || 'Failed to add comment.';
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            commentErrorMessage.textContent = 'An unexpected error occurred.';
-        }
-    });
-</script>
+      {{^isAuthenticated}}
+      <div class="rounded-3xl bg-slate-950/60 p-6 text-center ring-1 ring-white/10">
+        <h3 class="text-xl font-black text-white">Log in to comment</h3>
+        <p class="mt-2 text-slate-300">Authenticated readers can join the discussion.</p>
+        <div class="mt-5 flex justify-center gap-3">
+          <a href="/login" class="rounded-full bg-cyan-400 px-5 py-2.5 font-bold text-slate-950">Login</a>
+          {{#registrationEnabled}}
+          <a href="/register" class="rounded-full border border-white/15 px-5 py-2.5 font-bold text-white">Register</a>
+          {{/registrationEnabled}}
+        </div>
+      </div>
+      {{/isAuthenticated}}
+    </div>
+  </section>
+</article>

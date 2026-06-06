@@ -3,3 +3,12 @@
 .dart_tool/
 node_modules/
 repomix-output.txt
+
+# .roo
+.roo/
+
+# macOS
+.DS_Store
+
+# .brv
+.brv/
