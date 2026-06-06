@@ -31,7 +31,7 @@ class PostHandler {
   }
 
   Future<Response> _getPostBySlug(Request request) async {
-    final slug = request.params['slug'];
+    final slug = readPathString(request, 'slug');
     if (slug == null) {
       return jsonResponse({'message': 'Slug is required.'}, statusCode: 400);
     }

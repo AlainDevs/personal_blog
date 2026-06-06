@@ -189,7 +189,7 @@ void _mountPageRoutes(
   });
 
   router.get('/blog/<slug>', (request) async {
-    final slug = request.params['slug'];
+    final slug = readPathString(request, 'slug');
     if (slug == null) {
       return Response.badRequest(body: 'Post slug is required.');
     }

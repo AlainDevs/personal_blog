@@ -58,9 +58,14 @@ bool? readOptionalBool(Map<String, dynamic> payload, String key) {
   return null;
 }
 
+/// Reads a route parameter safely.
+String? readPathString(Request request, String key) {
+  return request.params[key];
+}
+
 /// Reads an integer route parameter safely.
 int? readPathInt(Request request, String key) {
-  final value = request.params[key];
+  final value = readPathString(request, key);
   return value == null ? null : int.tryParse(value);
 }
 

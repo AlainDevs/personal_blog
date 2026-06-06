@@ -4,9 +4,11 @@ import 'package:personal_blog/handlers/auth_handler.dart';
 import 'package:personal_blog/handlers/comment_handler.dart';
 import 'package:personal_blog/models/app_setting.dart';
 import 'package:personal_blog/models/comment.dart';
+import 'package:personal_blog/models/post.dart';
 import 'package:personal_blog/models/user.dart';
 import 'package:personal_blog/server.dart';
 import 'package:personal_blog/services/comment_service.dart';
+import 'package:personal_blog/services/post_service.dart';
 import 'package:personal_blog/services/settings_service.dart';
 import 'package:personal_blog/services/user_service.dart';
 import 'package:personal_blog/utils/auth_utils.dart';
@@ -119,6 +121,50 @@ void main() {
     );
   });
 
+  group('page routes', () {
+    test(
+      'renders a blog detail page from the slug path parameter',
+      () async {
+        final handler = createAppHandler(
+          postService: FakePostService(
+            Post(
+              id: 2,
+              userId: 1,
+              title: 'A tiny publishing checklist',
+              contentMarkdown: '## Before pressing publish',
+              contentHtml: '<h2>Before pressing publish</h2>',
+              slug: 'a-tiny-publishing-checklist',
+              published: true,
+              author: User(
+                id: 1,
+                email: 'admin@example.com',
+                username: 'admin',
+                passwordHash: 'hash',
+                role: UserRole.admin,
+              ),
+            ),
+          ),
+          commentService: FakeCommentService(),
+          settingsService: FakeSettingsService(registrationEnabled: true),
+        );
+
+        final response = await handler(
+          Request(
+            'GET',
+            Uri.parse('http://localhost/blog/a-tiny-publishing-checklist'),
+          ),
+        );
+
+        expect(response.statusCode, equals(200));
+        expect(
+          await response.readAsString(),
+          contains('A tiny publishing checklist'),
+        );
+      },
+      timeout: const Timeout(Duration(seconds: 5)),
+    );
+  });
+
   group('createAuthMiddleware', () {
     test('redirects anonymous admin page requests to login', () async {
       final handler = createAuthMiddleware()((request) async {
@@ -218,9 +264,26 @@ class FakeUserService extends UserService {
   }
 }
 
+class FakePostService extends PostService {
+  FakePostService(this.post);
+
+  final Post post;
+
+  @override
+  Future<Post?> getPostBySlug(String slug) async {
+    if (slug == post.slug) {
+      return post;
+    }
+    return null;
+  }
+}
+
 class FakeCommentService extends CommentService {
   int? lastPostId;
   int? lastUserId;
+
+  @override
+  Future<List<Comment>> getCommentsForPost(int postId) async => const [];
 
   @override
   Future<Comment> addComment(int postId, int userId, String content) async {
