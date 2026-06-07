@@ -123,11 +123,43 @@ void main() {
 
   group('page routes', () {
     test(
+      'renders the authenticated new post editor without a template error',
+      () async {
+        final token = AuthUtils.generateJwt(1, 'admin', username: 'admin');
+        final handler = createAppHandler(
+          postService: FakePostService(),
+          commentService: FakeCommentService(),
+          settingsService: FakeSettingsService(registrationEnabled: true),
+        );
+
+        final response = await handler(
+          Request(
+            'GET',
+            Uri.parse('http://localhost/admin/posts/new'),
+            headers: {
+              'Cookie':
+                  '${AuthUtils.authCookieName}=${Uri.encodeComponent(token)}',
+            },
+          ),
+        );
+
+        final body = await response.readAsString();
+
+        expect(response.statusCode, equals(200));
+        expect(body, contains('Create post'));
+        expect(body, contains('id="postId" value=""'));
+        expect(body, contains('id="title"'));
+        expect(body, contains('id="contentMarkdown"'));
+      },
+      timeout: const Timeout(Duration(seconds: 5)),
+    );
+
+    test(
       'renders a blog detail page from the slug path parameter',
       () async {
         final handler = createAppHandler(
           postService: FakePostService(
-            Post(
+            post: Post(
               id: 2,
               userId: 1,
               title: 'A tiny publishing checklist',
@@ -265,14 +297,15 @@ class FakeUserService extends UserService {
 }
 
 class FakePostService extends PostService {
-  FakePostService(this.post);
+  FakePostService({this.post});
 
-  final Post post;
+  final Post? post;
 
   @override
   Future<Post?> getPostBySlug(String slug) async {
-    if (slug == post.slug) {
-      return post;
+    final fakePost = post;
+    if (fakePost != null && slug == fakePost.slug) {
+      return fakePost;
     }
     return null;
   }

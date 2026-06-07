@@ -244,7 +244,7 @@ void _mountPageRoutes(
       settingsService,
       title: 'Create New Post',
     );
-    data['post'] = null;
+    data.addAll({'post': _emptyPostEditorViewModel(), 'isEditingPost': false});
     return _renderPage('admin/post_editor', data);
   });
 
@@ -260,7 +260,7 @@ void _mountPageRoutes(
     }
 
     final data = await _pageData(request, settingsService, title: 'Edit Post');
-    data['post'] = post.toMap();
+    data.addAll({'post': post.toMap(), 'isEditingPost': true});
     return _renderPage('admin/post_editor', data);
   });
 
@@ -324,6 +324,16 @@ Future<Map<String, dynamic>> _pageData(
     'currentUser': currentUser,
     'registrationEnabled': registrationEnabled,
     'registrationDisabled': !registrationEnabled,
+  };
+}
+
+Map<String, Object> _emptyPostEditorViewModel() {
+  return {
+    'id': '',
+    'title': '',
+    'slug': '',
+    'contentMarkdown': '',
+    'published': false,
   };
 }
 
